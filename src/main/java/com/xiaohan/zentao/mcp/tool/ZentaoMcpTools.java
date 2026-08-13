@@ -11,36 +11,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 声明公开的 MCP 工具契约，并把每个工具调用连接到 {@link ZentaoToolService}。
- *
- * <p>本类负责工具名称、说明、JSON Schema、行为提示和参数类型转换，不包含禅道
- * 业务实现。SDK 先依据 Schema 校验请求，进入处理器后再由这里完成默认值处理，
- * 最终统一包装为单段文本结果。</p>
- */
 public final class ZentaoMcpTools {
-    // 明确声明 Schema 方言，确保 MCP 客户端按相同规则理解输入约束。
+
     private static final String JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema";
-    // 与禅道 Bug 解决接口接受的枚举值保持一致。
+
     private static final List<String> RESOLUTIONS =
         List.of("fixed", "bydesign", "external", "willnotfix", "tostory");
 
     private final ZentaoToolService service;
 
-    /**
-     * 创建工具契约集合。
-     *
-     * @param service 实际执行业务行为的工具服务
-     */
     public ZentaoMcpTools(ZentaoToolService service) {
         this.service = service;
     }
 
-    /**
-     * 按稳定顺序返回服务公开的八个同步工具。
-     *
-     * @return 可直接注册到 MCP 服务构建器的工具规格列表
-     */
     public List<SyncToolSpecification> specifications() {
         return List.of(
             loginTool(),
@@ -54,7 +37,6 @@ public final class ZentaoMcpTools {
         );
     }
 
-    /** 声明登录工具；三个参数允许省略，以便业务层使用已保存配置补全。 */
     private SyncToolSpecification loginTool() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("baseUrl", stringProperty("禅道服务器地址 (如: https://zentao.example.com)"));
@@ -74,7 +56,6 @@ public final class ZentaoMcpTools {
         ));
     }
 
-    /** 声明任务列表工具，并在 Schema 中限制页码为正整数。 */
     private SyncToolSpecification myTasksTool() {
         Map<String, Object> page = new LinkedHashMap<>();
         page.put("type", "integer");
@@ -92,7 +73,6 @@ public final class ZentaoMcpTools {
         return specification(tool, request -> service.getMyTasks(optionalInt(request, "page", 1)));
     }
 
-    /** 声明任务详情工具；任务 ID 为必填字符串。 */
     private SyncToolSpecification taskDetailTool() {
         Tool tool = tool(
             "zentao_get_task_detail",
@@ -104,7 +84,6 @@ public final class ZentaoMcpTools {
         return specification(tool, request -> service.getTaskDetail(requiredString(request, "taskId")));
     }
 
-    /** 声明 Bug 列表工具，分页约束与任务列表保持一致。 */
     private SyncToolSpecification myBugsTool() {
         Map<String, Object> page = new LinkedHashMap<>();
         page.put("type", "integer");
@@ -122,7 +101,6 @@ public final class ZentaoMcpTools {
         return specification(tool, request -> service.getMyBugs(optionalInt(request, "page", 1)));
     }
 
-    /** 声明需求详情工具；查询会在业务层触发本地保存和后台资源下载。 */
     private SyncToolSpecification storyDetailTool() {
         Tool tool = tool(
             "zentao_get_story_detail",
@@ -134,7 +112,6 @@ public final class ZentaoMcpTools {
         return specification(tool, request -> service.getStoryDetail(requiredString(request, "storyId")));
     }
 
-    /** 声明 Bug 详情工具；Bug ID 为必填字符串。 */
     private SyncToolSpecification bugDetailTool() {
         Tool tool = tool(
             "zentao_get_bug_detail",
@@ -146,7 +123,6 @@ public final class ZentaoMcpTools {
         return specification(tool, request -> service.getBugDetail(requiredString(request, "bugId")));
     }
 
-    /** 声明完成任务工具；消耗工时可省略并默认使用零。 */
     private SyncToolSpecification finishTaskTool() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("taskId", stringProperty("任务ID"));
@@ -169,7 +145,6 @@ public final class ZentaoMcpTools {
         ));
     }
 
-    /** 声明解决 Bug 工具，并把解决方案限制为禅道支持的五个枚举值。 */
     private SyncToolSpecification resolveBugTool() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("bugId", stringProperty("Bug ID"));
@@ -192,7 +167,6 @@ public final class ZentaoMcpTools {
         ));
     }
 
-    /** 根据公共元数据组装一个 SDK 工具描述对象。 */
     private static Tool tool(
         String name,
         String title,
@@ -207,11 +181,6 @@ public final class ZentaoMcpTools {
             .build();
     }
 
-    /**
-     * 创建 MCP 工具行为提示。
-     *
-     * <p>{@code openWorldHint} 始终为真，因为所有工具都可能与进程外的禅道服务交互。</p>
-     */
     private static ToolAnnotations annotations(boolean readOnly, boolean destructive, boolean idempotent) {
         return ToolAnnotations.builder()
             .readOnlyHint(readOnly)
@@ -221,12 +190,6 @@ public final class ZentaoMcpTools {
             .build();
     }
 
-    /**
-     * 把可能抛出异常的业务处理器适配为 SDK 同步工具规格。
-     *
-     * <p>中断异常会恢复当前线程的中断标记；其他业务异常则统一转为带错误图标的文本，
-     * 避免不同工具各自实现异常包装。</p>
-     */
     private static SyncToolSpecification specification(
         Tool tool,
         ThrowingFunction<CallToolRequest, String> handler
@@ -246,18 +209,11 @@ public final class ZentaoMcpTools {
             .build();
     }
 
-    /** 将工具服务生成的文本包装成 MCP 内容结果。 */
     private static CallToolResult textResult(String text) {
-        // 只有 SDK 或 Schema 校验阶段的失败保留为 MCP 协议错误。
+        // 业务失败保留为可读文本；只有协议或 Schema 校验失败才使用 MCP 错误。
         return CallToolResult.builder().addTextContent(text).isError(false).build();
     }
 
-    /**
-     * 创建拒绝额外字段的 JSON Schema 对象定义。
-     *
-     * @param properties 属性名到属性 Schema 的映射；LinkedHashMap 可保持展示顺序
-     * @param required 必填属性名集合
-     */
     private static Map<String, Object> objectSchema(
         Map<String, Object> properties,
         Set<String> required
@@ -273,12 +229,10 @@ public final class ZentaoMcpTools {
         return schema;
     }
 
-    /** 创建只描述类型和用途的字符串属性 Schema。 */
     private static Map<String, Object> stringProperty(String description) {
         return Map.of("type", "string", "description", description);
     }
 
-    /** 读取必填字符串，并对 Schema 之外的空白值再做一次业务层防御。 */
     private static String requiredString(CallToolRequest request, String name) {
         String value = optionalString(request, name);
         if (value == null || value.isBlank()) {
@@ -287,21 +241,16 @@ public final class ZentaoMcpTools {
         return value;
     }
 
-    /** 读取可选字符串；参数不存在时返回 {@code null}。 */
     private static String optionalString(CallToolRequest request, String name) {
         Object value = arguments(request).get(name);
         return value == null ? null : value.toString();
     }
 
-    /** 读取可选字符串，并把缺失值或空白值替换为指定默认值。 */
     private static String optionalString(CallToolRequest request, String name, String fallback) {
         String value = optionalString(request, name);
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    /**
-     * 读取可选整数，并显式检查从通用 {@link Number} 转为 {@code int} 时不会溢出。
-     */
     private static int optionalInt(CallToolRequest request, String name, int fallback) {
         Object value = arguments(request).get(name);
         if (!(value instanceof Number number)) {
@@ -314,7 +263,6 @@ public final class ZentaoMcpTools {
         return (int) parsed;
     }
 
-    /** 读取可选浮点数，并拒绝 JSON 业务逻辑无法处理的无穷值和 NaN。 */
     private static double optionalDouble(CallToolRequest request, String name, double fallback) {
         Object value = arguments(request).get(name);
         if (!(value instanceof Number number)) {
@@ -327,15 +275,12 @@ public final class ZentaoMcpTools {
         return parsed;
     }
 
-    /** 统一把 SDK 可能返回的空参数映射转换为空 Map。 */
     private static Map<String, Object> arguments(CallToolRequest request) {
         return request.arguments() == null ? Map.of() : request.arguments();
     }
 
-    /** 允许工具处理函数保留受检异常的轻量函数式接口。 */
     @FunctionalInterface
     private interface ThrowingFunction<T, R> {
-        /** 应用一次工具调用。 */
         R apply(T value) throws Exception;
     }
 }
