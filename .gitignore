@@ -1,5 +1,5 @@
-# Maven build output
-target/
+# Maven build output (keep only the runnable shaded JAR trackable)
+target/*
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -13,6 +13,7 @@ buildNumber.properties
 *.class
 *.jar
 !.mvn/wrapper/maven-wrapper.jar
+!target/zentao-mcp.jar
 *.war
 *.ear
 *.nar
