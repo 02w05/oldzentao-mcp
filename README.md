@@ -1,7 +1,7 @@
 <h1 align="center">oldzentao-mcp</h1>
 
 <p align="center">
-  面向禅道 12.x 旧版页面与 API 路由的 Java MCP 服务
+  面向禅道企业版 4.1.3 以及开源版 12.5.X 旧版页面与 API 路由的 Java MCP 服务
 </p>
 
 <p align="center">
